@@ -3,37 +3,40 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Config:
-    
-    BOT_TOKEN = os.getenv('BOT_TOKEN')
+
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
     BOT_ID = None
     BOT_USERNAME = None
-    FORUM_GROUP_ID = int(os.getenv('FORUM_GROUP_ID') or 0)
-    ADMIN_IDS = [int(id) for id in os.getenv('ADMIN_IDS', '').split(',') if id]
-    
-    
-    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-    ENABLE_AI_FILTER = os.getenv('ENABLE_AI_FILTER', 'true').lower() == 'true'
-    AI_CONFIDENCE_THRESHOLD = int(os.getenv('AI_CONFIDENCE_THRESHOLD', '70'))
-    
-    
-    VERIFICATION_ENABLED = os.getenv('VERIFICATION_ENABLED', 'true').lower() == 'true'
-    AUTO_UNBLOCK_ENABLED = os.getenv('AUTO_UNBLOCK_ENABLED', 'true').lower() == 'true'
-    
-    
-    DATABASE_PATH = os.getenv('DATABASE_PATH', './data/bot.db')
-    
-    
-    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '5'))
-    QUEUE_TIMEOUT = int(os.getenv('QUEUE_TIMEOUT', '30'))
-    
-    
-    VERIFICATION_TIMEOUT = int(os.getenv('VERIFICATION_TIMEOUT', '300'))
-    MAX_VERIFICATION_ATTEMPTS = int(os.getenv('MAX_VERIFICATION_ATTEMPTS', '3'))
-    
-    
-    MAX_MESSAGES_PER_MINUTE = int(os.getenv('MAX_MESSAGES_PER_MINUTE', '30'))
-    
+    FORUM_GROUP_ID = int(os.getenv("FORUM_GROUP_ID") or 0)
+    ADMIN_IDS = [int(id) for id in os.getenv("ADMIN_IDS", "").split(",") if id]
+
+    AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini").lower()
+
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+    CUSTOM_AI_API_URL = os.getenv("CUSTOM_AI_API_URL")
+    CUSTOM_AI_API_KEY = os.getenv("CUSTOM_AI_API_KEY")
+    CUSTOM_AI_MODEL = os.getenv("CUSTOM_AI_MODEL", "gpt-4")
+    CUSTOM_AI_VERIFICATION_MODEL = os.getenv("CUSTOM_AI_VERIFICATION_MODEL")
+
+    ENABLE_AI_FILTER = os.getenv("ENABLE_AI_FILTER", "true").lower() == "true"
+    AI_CONFIDENCE_THRESHOLD = int(os.getenv("AI_CONFIDENCE_THRESHOLD", "70"))
+
+    VERIFICATION_ENABLED = os.getenv("VERIFICATION_ENABLED", "true").lower() == "true"
+    AUTO_UNBLOCK_ENABLED = os.getenv("AUTO_UNBLOCK_ENABLED", "true").lower() == "true"
+
+    DATABASE_PATH = os.getenv("DATABASE_PATH", "./data/bot.db")
+
+    MAX_WORKERS = int(os.getenv("MAX_WORKERS", "5"))
+    QUEUE_TIMEOUT = int(os.getenv("QUEUE_TIMEOUT", "30"))
+
+    VERIFICATION_TIMEOUT = int(os.getenv("VERIFICATION_TIMEOUT", "300"))
+    MAX_VERIFICATION_ATTEMPTS = int(os.getenv("MAX_VERIFICATION_ATTEMPTS", "3"))
+
+    MAX_MESSAGES_PER_MINUTE = int(os.getenv("MAX_MESSAGES_PER_MINUTE", "30"))
+
     @classmethod
     def validate(cls):
         if not cls.BOT_TOKEN:

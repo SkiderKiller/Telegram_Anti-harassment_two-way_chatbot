@@ -33,7 +33,7 @@
 | 特性 | 描述 |
 | :--- | :--- |
 | 💬 **话题群组管理** | 利用 Telegram Forum 功能，为每位用户创建独立对话线程，自动展示用户信息，便于消息追溯与管理。 |
-| 🤖 **AI 智能筛选** | 集成 Google Gemini API，可智能识别潜在的垃圾信息或恶意内容，并用于生成多样化的人机验证问题。 |
+| 🤖 **AI 智能筛选** | 支持 Google Gemini API 和自定义 AI API（符合 OpenAI API v1 格式），可智能识别潜在的垃圾信息或恶意内容，并用于生成多样化的人机验证问题。 |
 | 🛡️ **人机验证系统** | 新用户首次交互时需通过 AI 生成的验证问题，有效拦截自动化机器人骚扰。 |
 | ⚡ **高性能处理** | 基于 `asyncio` 的异步消息队列和多 Worker 并行处理机制，轻松应对高并发场景，杜绝消息堵塞。 |
 | 🖼️ **多媒体支持** | 无缝转发图片、视频、音频、文档等多种媒体格式，并完整保留 Markdown 格式。 |
@@ -240,7 +240,9 @@ python bot.py
 
 1.  **Bot Token**: 在 Telegram 中与 [@BotFather](https://t.me/BotFather) 对话，使用 `/newbot` 命令创建机器人即可获得。
 2.  **话题群组 ID**: 创建一个超级群组 (Supergroup)，在设置中启用“话题”(Topics) 功能。然后将您的机器人添加为该群组的管理员。在群组中发送/getid，机器人会自动回复包含群组 ID 的信息。
-3.  **Gemini API 密钥** (可选): 访问 [Google AI Studio](https://aistudio.google.com/api-keys) 创建并复制您的 API 密钥。
+3.  **AI API 密钥** (可选): 
+    - **Gemini API**: 访问 [Google AI Studio](https://aistudio.google.com/api-keys) 创建并复制您的 API 密钥。
+    - **自定义 AI API**: 如使用 OpenAI 或其他符合 OpenAI API v1 格式的服务，请准备好 API URL 和密钥。
 
 ### 📜 命令列表
 
@@ -260,6 +262,16 @@ python bot.py
 ## 🔧 配置说明
 
 所有配置项均通过 `.env` 文件进行管理。详细的变量说明请参考 [快速开始](#-快速开始-docker-推荐) 部分的 `.env` 文件示例。
+
+### AI 提供商配置
+
+本项目支持多种 AI 服务提供商：
+
+- **Gemini API** (默认): 使用 Google Gemini AI 服务
+- **OpenAI API**: 使用 OpenAI 官方 API
+- **自定义 AI API**: 支持任何符合 OpenAI API v1 格式的服务（如 Azure OpenAI、各种国产大模型等）
+
+在 `.env` 文件中设置 `AI_PROVIDER` 为 `gemini`、`openai` 或 `custom`，然后配置相应的 API 密钥和 URL。
 
 ---
 

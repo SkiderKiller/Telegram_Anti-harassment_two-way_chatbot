@@ -1,18 +1,11 @@
-try:
-    from google.genai import Client as GeminiClient
-
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-    GeminiClient = None
-
+from openai import AsyncOpenAI
 from telegram import Message
 from config import config
 import json
 import random
-import re
-from PIL import Image
+import base64
 import io
+from PIL import Image
 
 LOCAL_VERIFICATION_QUESTIONS = [
     {
@@ -163,16 +156,43 @@ LOCAL_VERIFICATION_QUESTIONS = [
 ]
 
 
-class GeminiService:
+class OpenAIService:
     def __init__(self):
-        if config.GEMINI_API_KEY and GEMINI_AVAILABLE:
-            self.client = GeminiClient(api_key=config.GEMINI_API_KEY)
-            self.filter_model_name = "gemini-2.5-flash"
-            self.verification_model_name = "gemini-2.5-flash-lite"
+        if config.CUSTOM_AI_API_KEY and config.CUSTOM_AI_API_URL:
+            self.client = AsyncOpenAI(
+                api_key=config.CUSTOM_AI_API_KEY, base_url=config.CUSTOM_AI_API_URL
+            )
+            self.filter_model_name = config.CUSTOM_AI_MODEL
+            self.verification_model_name = (
+                config.CUSTOM_AI_VERIFICATION_MODEL or config.CUSTOM_AI_MODEL
+            )
         else:
             self.client = None
             self.filter_model_name = None
             self.verification_model_name = None
+
+    def _image_to_base64(self, image_bytes: bytes) -> str:
+        try:
+            image = Image.open(io.BytesIO(image_bytes))
+            if image.mode in ("RGBA", "LA", "P"):
+                background = Image.new("RGB", image.size, (255, 255, 255))
+                if image.mode == "P":
+                    image = image.convert("RGBA")
+                background.paste(
+                    image,
+                    mask=image.split()[-1] if image.mode in ("RGBA", "LA") else None,
+                )
+                image = background
+            elif image.mode != "RGB":
+                image = image.convert("RGB")
+
+            buffered = io.BytesIO()
+            image.save(buffered, format="JPEG", quality=85)
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            return f"data:image/jpeg;base64,{img_str}"
+        except Exception as e:
+            print(f"Error converting image to base64: {e}")
+            return None
 
     async def analyze_message(
         self, message: Message, image_bytes: bytes = None
@@ -180,60 +200,67 @@ class GeminiService:
         if not self.client or not self.filter_model_name or not config.ENABLE_AI_FILTER:
             return {"is_spam": False, "reason": "AI filter disabled"}
 
-        content = []
-        prompt_parts = [
-            "你是一个内容审查员。你的任务是分析提供给你的文本和/或图片内容，"
-            "并判断其是否包含垃圾信息、恶意软件、钓鱼链接、不当言论、辱骂、攻击性词语或任何违反安全政策的内容。",
-            "请严格按照要求，仅以JSON格式返回你的分析结果，不要包含任何额外的解释或标记。",
-            "**输出格式**: 你必须且只能以严格的JSON格式返回你的分析结果，不得包含任何解释性文字或代码块标记。",
+        messages = []
+
+        prompt_text = (
+            "你是一个内容审查员。你的任务是分析提供给你的文本和/或图片内容，并判断其是否包含垃圾信息、恶意软件、钓鱼链接、不当言论、辱骂、攻击性词语或任何违反安全政策的内容。\n"
+            "请严格按照要求，仅以JSON格式返回你的分析结果，不要包含任何额外的解释或标记。\n"
+            "**输出格式**: 你必须且只能以严格的JSON格式返回你的分析结果，不得包含任何解释性文字或代码块标记。\n"
             '**JSON结构**:\n```json\n{\n  "is_spam": boolean,\n  "reason": "string"\n}\n```\n'
             "*   `is_spam`: 如果内容违反**任何一条**安全策略，则为 `true`；如果内容完全安全，则为 `false`。\n"
-            "*   `reason`: 用一句话精准概括判断依据。如果违规，请明确指出违规的类型。"
-            '如果安全，此字段固定为 `"内容未发现违规。"`',
-            "\n--- 以下是需要分析的内容 ---",
-        ]
+            '*   `reason`: 用一句话精准概括判断依据。如果违规，请明确指出违规的类型。如果安全，此字段固定为 `"内容未发现违规。"`\n'
+            "\n--- 以下是需要分析的内容 ---\n"
+        )
 
         if message.text:
-            content.append(message.text)
+            prompt_text += f"\n文本内容: {message.text}"
+
+        content_parts = []
 
         if image_bytes:
-            try:
-                image = Image.open(io.BytesIO(image_bytes))
-                content.append(image)
-            except Exception as e:
-                print(f"Error processing image for Gemini: {e}")
-                pass
+            base64_image = self._image_to_base64(image_bytes)
+            if base64_image:
+                content_parts.append({"type": "text", "text": prompt_text})
+                content_parts.append(
+                    {"type": "image_url", "image_url": {"url": base64_image}}
+                )
+            else:
+                content_parts.append({"type": "text", "text": prompt_text})
+        else:
+            content_parts.append({"type": "text", "text": prompt_text})
 
-        if not content:
-            return {"is_spam": False, "reason": "No content to analyze"}
+        messages.append(
+            {
+                "role": "user",
+                "content": content_parts if len(content_parts) > 1 else prompt_text,
+            }
+        )
 
-        content.append("\n".join(prompt_parts))
-
-        print("--- Sending request to Gemini API ---")
-        print(f"Content: {content}")
+        print("--- Sending request to Custom AI API ---")
+        print(f"Model: {self.filter_model_name}")
 
         try:
-            response = await self.client.aio.models.generate_content(
-                model=self.filter_model_name, contents=content
+            response = await self.client.chat.completions.create(
+                model=self.filter_model_name,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=500,
             )
 
-            print("--- Received response from Gemini API ---")
+            print("--- Received response from Custom AI API ---")
 
-            if not hasattr(response, "candidates") or not response.candidates:
-                print("Gemini analysis was blocked.")
-                if hasattr(response, "prompt_feedback"):
-                    print(f"Prompt feedback: {response.prompt_feedback}")
+            if not response.choices:
+                print("AI analysis was blocked or returned no choices.")
                 return {"is_spam": True, "reason": "内容审查失败，可能包含不当内容。"}
 
-            if response.candidates and response.candidates[0].content.parts:
-                response_text = response.candidates[0].content.parts[0].text
-            else:
-                response_text = None
+            response_text = response.choices[0].message.content
 
             print(f"Raw response: {response_text}")
 
             if not response_text:
-                raise ValueError("Gemini API returned an empty response.")
+                raise ValueError("AI API returned an empty response.")
+
+            import re
 
             clean_text = re.sub(r"```json\s*|\s*```", "", response_text).strip()
             result = json.loads(clean_text)
@@ -241,14 +268,7 @@ class GeminiService:
             print(f"Parsed result: {result}")
             return result
         except Exception as e:
-            print(f"Gemini analysis failed: {e}")
-            if "response" in locals():
-                try:
-                    if response.candidates and response.candidates[0].content.parts:
-                        response_text = response.candidates[0].content.parts[0].text
-                        print(f"Original Gemini response: {response_text}")
-                except (AttributeError, IndexError):
-                    print("Could not retrieve response text.")
+            print(f"AI analysis failed: {e}")
             return {"is_spam": False, "reason": "Analysis failed"}
 
     def _get_local_question(self) -> dict:
@@ -263,7 +283,7 @@ class GeminiService:
             "options": options,
         }
 
-    async def generate_unblock_question(self) -> dict:
+    async def generate_verification_question(self, is_unblock: bool = False) -> dict:
         if not self.client or not self.verification_model_name:
             return self._get_local_question()
 
@@ -294,17 +314,22 @@ class GeminiService:
         }
         """
         try:
-            response = await self.client.aio.models.generate_content(
-                model=self.verification_model_name, contents=prompt
+            response = await self.client.chat.completions.create(
+                model=self.verification_model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.8,
+                max_tokens=500,
             )
 
-            if response.candidates and response.candidates[0].content.parts:
-                response_text = response.candidates[0].content.parts[0].text
-            else:
-                response_text = None
+            if not response.choices:
+                raise ValueError("AI API返回空响应")
+
+            response_text = response.choices[0].message.content
 
             if not response_text:
-                raise ValueError("Gemini API返回空响应")
+                raise ValueError("AI API返回空响应")
+
+            import re
 
             clean_text = re.sub(r"```json\s*|\s*```", "", response_text).strip()
             data = json.loads(clean_text)
@@ -319,101 +344,24 @@ class GeminiService:
                 "options": options,
             }
         except Exception as e:
-            print(f"生成解封验证问题失败: {e}")
+            print(f"生成{'解封' if is_unblock else ''}验证问题失败: {e}")
 
-            if "response" in locals():
+            if (
+                "response" in locals()
+                and hasattr(response, "choices")
+                and response.choices
+            ):
                 try:
-                    if response.candidates and response.candidates[0].content.parts:
-                        response_text = response.candidates[0].content.parts[0].text
-                        if response_text:
-                            print(f"Gemini原始响应: {response_text}")
+                    response_text = response.choices[0].message.content
+                    if response_text:
+                        print(f"AI原始响应: {response_text}")
                 except (AttributeError, IndexError):
                     pass
 
             return self._get_local_question()
+
+    async def generate_unblock_question(self) -> dict:
+        return await self.generate_verification_question(is_unblock=True)
 
     async def generate_verification_challenge(self) -> dict:
-        if not self.client or not self.verification_model_name:
-            return self._get_local_question()
-
-        prompt = """
-        # 角色
-        你是一个人机验证（CAPTCHA）问题生成器。
-        # 任务
-        生成一个随机的、适合成年人的中文常识性问题，用于区分人类和机器人。问题的格式应该是多样的。
-        # 要求
-        1.  **问题格式多样性**: 你需要随机选择以下两种问题格式之一进行提问：
-            *   **a) 标准直接提问**: 例如，"中国的首都是哪里？"
-            *   **b) 反向排除提问**: 使用"以下哪个不属于...？"或类似的句式。例如，"以下哪个不属于行星？"
-        2.  **主题**: 问题主题应为完全随机的日常通用常识，无需限定在特定领域。
-        3.  **难度**: 问题和选项的难度应设定为"绝大多数18岁以上母语为中文的成年人都能立即回答正确"的水平，避免专业或冷门知识。
-        4.  **明确性**: 问题必须只有一个明确无误的正确答案。
-        5.  **答案逻辑**:
-            *   提供一个`correct_answer`（正确答案）。
-            *   提供一个包含三个字符串的列表`incorrect_answers`（干扰项）。
-            *   **对于标准问题**，所有选项应属于同一类别。
-            *   **对于反向排除问题**，三个`incorrect_answers`应属于同一类别，而`correct_answer`则是那个不属于该类别的 outlier（局外者）。
-        6.  **语言**: 所有内容必须为简体中文。
-        7.  **输出格式**: 严格按照以下JSON格式返回，不要包含任何额外的解释或文字。
-        # JSON格式示例
-        {
-          "question": "问题文本",
-          "correct_answer": "正确答案",
-          "incorrect_answers": ["干扰项1", "干扰项2", "干扰项3"]
-        }
-        """
-        try:
-            response = await self.client.aio.models.generate_content(
-                model=self.verification_model_name, contents=prompt
-            )
-
-            if response.candidates and response.candidates[0].content.parts:
-                response_text = response.candidates[0].content.parts[0].text
-            else:
-                response_text = None
-
-            if not response_text:
-                raise ValueError("Gemini API返回空响应")
-
-            clean_text = re.sub(r"```json\s*|\s*```", "", response_text).strip()
-            data = json.loads(clean_text)
-
-            correct_answer = data["correct_answer"]
-            options = data["incorrect_answers"] + [correct_answer]
-            random.shuffle(options)
-
-            return {
-                "question": data["question"],
-                "correct_answer": correct_answer,
-                "options": options,
-            }
-        except Exception as e:
-            print(f"生成验证问题失败: {e}")
-
-            if "response" in locals():
-                try:
-                    if response.candidates and response.candidates[0].content.parts:
-                        response_text = response.candidates[0].content.parts[0].text
-                        if response_text:
-                            print(f"Gemini原始响应: {response_text}")
-                except (AttributeError, IndexError):
-                    pass
-
-            return self._get_local_question()
-
-
-def _create_ai_service():
-    if config.AI_PROVIDER == "openai" or config.AI_PROVIDER == "custom":
-        try:
-            from services.openai_service import OpenAIService
-
-            return OpenAIService()
-        except Exception as e:
-            print(f"无法初始化OpenAI服务: {e}")
-            print("回退到Gemini服务")
-            return GeminiService()
-    else:
-        return GeminiService()
-
-
-gemini_service = _create_ai_service()
+        return await self.generate_verification_question(is_unblock=False)
