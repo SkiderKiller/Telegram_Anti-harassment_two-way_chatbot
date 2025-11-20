@@ -7,3 +7,14 @@ services:
      - .env
     volumes:
      - ./data:/app/data
+    # 如果启用了自定义AI API，暴露端口
+    ports:
+      - "${CUSTOM_AI_API_PORT:-8000}:${CUSTOM_AI_API_PORT:-8000}"
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get(f'http://localhost:${CUSTOM_AI_API_PORT:-8000}/health') if '${ENABLE_CUSTOM_AI_API:-false}'.lower() == 'true' else True"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      disabled: ${ENABLE_CUSTOM_AI_API:-false}

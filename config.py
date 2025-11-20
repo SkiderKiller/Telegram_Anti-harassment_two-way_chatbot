@@ -17,6 +17,13 @@ class Config:
     AI_CONFIDENCE_THRESHOLD = int(os.getenv('AI_CONFIDENCE_THRESHOLD', '70'))
     
     
+    # Custom AI API配置
+    ENABLE_CUSTOM_AI_API = os.getenv('ENABLE_CUSTOM_AI_API', 'false').lower() == 'true'
+    CUSTOM_AI_API_PORT = int(os.getenv('CUSTOM_AI_API_PORT', '8000'))
+    CUSTOM_AI_API_HOST = os.getenv('CUSTOM_AI_API_HOST', '0.0.0.0')
+    CUSTOM_AI_API_KEY = os.getenv('CUSTOM_AI_API_KEY', '')  # 可选的API密钥验证
+    
+    
     VERIFICATION_ENABLED = os.getenv('VERIFICATION_ENABLED', 'true').lower() == 'true'
     AUTO_UNBLOCK_ENABLED = os.getenv('AUTO_UNBLOCK_ENABLED', 'true').lower() == 'true'
     
