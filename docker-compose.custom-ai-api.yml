@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  custom-ai-api:
+    build: .
+    container_name: custom-ai-api
+    ports:
+      - "${CUSTOM_AI_API_PORT:-8000}:8000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - CUSTOM_AI_API_PORT=8000
+      - CUSTOM_AI_API_HOST=0.0.0.0
+      - CUSTOM_AI_API_KEY=${CUSTOM_AI_API_KEY:-}
+      - ENABLE_CUSTOM_AI_API=true
+    restart: unless-stopped
+    # 只运行API服务器，不启动Telegram Bot
+    command: ["python", "custom_ai_api_server.py"]
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  default:
+    name: custom-ai-api-network

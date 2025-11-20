@@ -39,6 +39,7 @@
 | 🖼️ **多媒体支持** | 无缝转发图片、视频、音频、文档等多种媒体格式，并完整保留 Markdown 格式。 |
 | ⚫ **黑名单管理** | 管理员可轻松拉黑/解封用户。被拉黑用户将收到友好提示，并可通过 AI 生成的问答挑战进行自助解封。 |
 | 🔐 **权限控制** | 基于 Telegram ID 的多管理员权限系统，确保只有授权人员才能执行管理操作。 |
+| 🌐 **自定义AI API** | 提供 OpenAI 兼容的 API 接口，基于 Gemini 后端，支持标准 OpenAI API 调用格式。 |
 
 ---
 
@@ -95,6 +96,12 @@ ENABLE_AI_FILTER=true
 
 # AI判断的置信度阈值（0-100），高于此值才会被认为是恶意内容
 AI_CONFIDENCE_THRESHOLD=70
+
+# 自定义AI API配置（OpenAI兼容API）
+ENABLE_CUSTOM_AI_API=false
+CUSTOM_AI_API_PORT=8000
+CUSTOM_AI_API_HOST=0.0.0.0
+# CUSTOM_AI_API_KEY=your_api_key_here  # 可选的API密钥验证
 
 # --- 功能开关 ---
 
@@ -260,6 +267,71 @@ python bot.py
 ## 🔧 配置说明
 
 所有配置项均通过 `.env` 文件进行管理。详细的变量说明请参考 [快速开始](#-快速开始-docker-推荐) 部分的 `.env` 文件示例。
+
+---
+
+## 🌐 自定义AI API服务
+
+本项目还提供了一个基于Gemini的OpenAI兼容API服务，可以让您使用标准的OpenAI API格式来调用Gemini的能力。
+
+### 📋 主要特性
+
+- **完全兼容OpenAI API v1格式**
+- **支持多种模型映射**（gpt-3.5-turbo, gpt-4, gpt-4o等）
+- **支持流式和非流式响应**
+- **可选的API密钥验证**
+- **自动生成API文档**
+
+### 🚀 快速启动
+
+1. **启用API服务**：
+   在`.env`文件中设置：
+   ```env
+   ENABLE_CUSTOM_AI_API=true
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+
+2. **启动服务**：
+   ```bash
+   python bot.py  # 随Bot一起启动
+   # 或独立运行
+   python custom_ai_api_server.py
+   ```
+
+3. **访问API文档**：
+   - Swagger UI: http://localhost:8000/docs
+   - ReDoc: http://localhost:8000/redoc
+
+### 💡 使用示例
+
+```bash
+# 使用curl调用API
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "gpt-3.5-turbo",
+    "messages": [{"role": "user", "content": "你好！"}]
+  }'
+```
+
+```python
+# 使用OpenAI Python SDK
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="your_api_key"  # 可选
+)
+
+response = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "你好！"}]
+)
+
+print(response.choices[0].message.content)
+```
+
+📖 **详细文档**: 查看 [CUSTOM_AI_API_README.md](CUSTOM_AI_API_README.md) 了解完整的使用指南。
 
 ---
 
